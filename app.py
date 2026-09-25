@@ -2,33 +2,25 @@ import os
 import random
 import string
 import requests
-from flask import Flask, render_template_string, request, jsonify
-from flask_mail import Mail, Message
+import resend
+from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# --- CONFIGURACIÓN DE CORREO (Lee desde Render) ---
-# --- CONFIGURACIÓN DE CORREO CON SSL (Evita el WORKER TIMEOUT en Render) ---
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 465
-app.config['MAIL_USE_SSL'] = True
-app.config['MAIL_USE_TLS'] = False
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = ('Chaz Servicios', os.environ.get('MAIL_USERNAME'))
-mail = Mail(app)
+# --- CONFIGURACIÓN DE CORREO CON RESEND ---
+resend.api_key = os.environ.get('RESEND_API_KEY')
 
-# --- CREDENCIALES DE TELEGRAM REUTILIZADAS ---
+# --- CREDENCIALES DE TELEGRAM ---
 TELEGRAM_BOT_TOKEN = '8645189972:AAHCxjsGiorRmBs19BwYJIDiteEaQEmKxWg'
 TELEGRAM_CHAT_ID = '7798074673'
 
-# Base de datos temporal en memoria para el seguimiento de pedidos
+# Base de datos temporal en memoria
 solicitudes_db = {}
 
 def generar_codigo_seguimiento():
     return 'CHAZ-' + ''.join(random.choices(string.digits, k=4))
 
-# HTML PRINCIPAL CON MENÚ DESPLEGABLE Y ALPINE.JS
+# HTML PRINCIPAL
 HTML_LAYOUT = """
 <!DOCTYPE html>
 <html lang="es">
@@ -51,7 +43,6 @@ HTML_LAYOUT = """
 <div class="form-card" x-data="formularioChaz()">
     <h2>⚡ Pedir un servicio en Chaz</h2>
     <form action="/pedir-servicio" method="POST">
-        
         <label>Tu Nombre:</label>
         <input type="text" name="nombre" required placeholder="Ej: Juan Pérez">
 
@@ -83,7 +74,7 @@ HTML_LAYOUT = """
         </div>
 
         <label>Describe brevemente el problema:</label>
-        <textarea name="descripcion" rows="3" required placeholder="Ej: Fuga bajo el lavaplatos / Cortocircuito en el enchufe de la cocina"></textarea>
+        <textarea name="descripcion" rows="3" required placeholder="Ej: Fuga bajo el lavaplatos / Cortocircuito en la cocina"></textarea>
 
         <button type="submit">Solicitar Técnico Ahora</button>
     </form>
@@ -126,7 +117,7 @@ function formularioChaz() {
 </html>
 """
 
-# HTML PARA LA PÁGINA DE SEGUIMIENTO QUE REVISA EL CLIENTE
+# HTML SEGUIMIENTO
 HTML_SEGUIMIENTO = """
 <!DOCTYPE html>
 <html lang="es">
@@ -187,7 +178,6 @@ def pedir_servicio():
 
     codigo = generar_codigo_seguimiento()
 
-    # Guardar estado en memoria
     solicitudes_db[codigo] = {
         'nombre': nombre,
         'categoria': categoria,
@@ -210,32 +200,32 @@ def pedir_servicio():
 """
     enviar_telegram(mensaje_telegram)
 
-    # 2. Correo de Confirmación al Cliente
+    # 2. Envío de Correo mediante API HTTP de Resend (Rápido e infalible)
     try:
-        msg = Message(
-            subject=f"Confirmación de Solicitud #{codigo} - Chaz",
-            recipients=[email]
-        )
-        msg.html = f"""
-        <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px;">
-            <h2 style="color: #2b6cb0; text-align: center;">¡Recibimos tu solicitud en Chaz!</h2>
-            <p>Hola <strong>{nombre}</strong>,</p>
-            <p>Hemos recibido tu requerimiento para el servicio de <strong>{categoria}</strong> ({subcategoria}). Tu código de seguimiento es:</p>
-            <div style="background-color: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #2b6cb0; border-radius: 6px; margin: 20px 0;">
-                {codigo}
+        resend.Emails.send({
+            "from": "Chaz Servicios <onboarding@resend.dev>",
+            "to": [email],
+            "subject": f"Confirmación de Solicitud #{codigo} - Chaz",
+            "html": f"""
+            <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px;">
+                <h2 style="color: #2b6cb0; text-align: center;">¡Recibimos tu solicitud en Chaz!</h2>
+                <p>Hola <strong>{nombre}</strong>,</p>
+                <p>Hemos recibido tu requerimiento para el servicio de <strong>{categoria}</strong> ({subcategoria}). Tu código de seguimiento es:</p>
+                <div style="background-color: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #2b6cb0; border-radius: 6px; margin: 20px 0;">
+                    {codigo}
+                </div>
+                <p>Estamos notificando a nuestros técnicos verificados de tu zona. Te contactaremos a la brevedad para coordinar la visita.</p>
+                <p>Puedes revisar el estado de tu solicitud en tiempo real haciendo clic en el siguiente enlace:</p>
+                <div style="text-align: center; margin: 25px 0;">
+                    <a href="https://{request.host}/seguimiento/{codigo}" style="background-color: #2b6cb0; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ver Estado de mi Solicitud</a>
+                </div>
+                <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
+                <p style="font-size: 12px; color: #6b7280; text-align: center;">Chaz – Asistencia al Hogar On-Demand</p>
             </div>
-            <p>Estamos notificando a nuestros técnicos verificados de tu zona. Te contactaremos a la brevedad para coordinar la visita.</p>
-            <p>Puedes revisar el estado de tu solicitud en tiempo real haciendo clic en el siguiente botón:</p>
-            <div style="text-align: center; margin: 25px 0;">
-                <a href="https://{request.host}/seguimiento/{codigo}" style="background-color: #2b6cb0; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ver Estado de mi Solicitud</a>
-            </div>
-            <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
-            <p style="font-size: 12px; color: #6b7280; text-align: center;">Chaz – Asistencia al Hogar On-Demand</p>
-        </div>
-        """
-        mail.send(msg)
+            """
+        })
     except Exception as e:
-        print(f"Error enviando correo: {e}")
+        print(f"Error enviando correo con Resend: {e}")
 
     return f"""
     <div style='text-align:center; padding:50px; font-family:sans-serif;'>
