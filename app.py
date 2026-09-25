@@ -33,13 +33,12 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Inicializar BD al arrancar la app
 init_db()
 
 def generar_codigo_seguimiento():
     return 'CHAZ-' + ''.join(random.choices(string.digits, k=4))
 
-# --- VISTA CLIENTE: FORMULARIO PRINCIPAL ---
+# --- VISTA CLIENTE: FORMULARIO PRINCIPAL Y BUSCADOR ---
 HTML_LAYOUT = """
 <!DOCTYPE html>
 <html lang="es">
@@ -49,8 +48,11 @@ HTML_LAYOUT = """
     <title>Chaz - Asistencia al Hogar</title>
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f6f9; display: flex; justify-content: center; }
-        .form-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 480px; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f6f9; display: flex; flex-direction: column; align-items: center; }
+        .top-bar { width: 100%; max-width: 480px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .top-bar a { font-size: 13px; color: #2b6cb0; text-decoration: none; font-weight: bold; background: #e2e8f0; padding: 8px 12px; border-radius: 20px; }
+        .top-bar a:hover { background: #cbd5e0; }
+        .form-card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); width: 100%; max-width: 480px; box-sizing: border-box; }
         h2 { color: #1a202c; text-align: center; margin-bottom: 20px; font-size: 24px; }
         label { font-size: 14px; font-weight: 600; color: #4a5568; display: block; margin-bottom: 6px; }
         input, select, textarea { width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #cbd5e0; border-radius: 6px; box-sizing: border-box; font-size: 14px; }
@@ -59,8 +61,14 @@ HTML_LAYOUT = """
     </style>
 </head>
 <body>
+
+<div class="top-bar">
+    <span style="font-size: 14px; font-weight: bold; color: #2b6cb0;">⚡ Chaz</span>
+    <a href="/buscar-seguimiento">🔍 Consultar mi pedido</a>
+</div>
+
 <div class="form-card" x-data="formularioChaz()">
-    <h2>⚡ Pedir un servicio en Chaz</h2>
+    <h2>Pedir un servicio</h2>
     <form action="/pedir-servicio" method="POST">
         <label>Tu Nombre:</label>
         <input type="text" name="nombre" required placeholder="Ej: Juan Pérez">
@@ -136,7 +144,35 @@ function formularioChaz() {
 </html>
 """
 
-# --- VISTA CLIENTE: SEGUIMIENTO ---
+# --- VISTA CLIENTE: BUSCADOR MANUAL DE CÓDIGO ---
+HTML_BUSCAR = """
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consultar Estado - Chaz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-xl shadow-md max-w-md w-full text-center">
+        <h1 class="text-2xl font-bold text-blue-600 mb-2">⚡ Chaz - Seguimiento</h1>
+        <p class="text-gray-500 mb-6 text-sm">Ingresa el código de 4 números que te dimos al solicitar el servicio (Ej: CHAZ-1234).</p>
+
+        <form action="/buscar-seguimiento" method="POST" class="space-y-4">
+            <input type="text" name="codigo" required placeholder="Ej: CHAZ-1234" class="w-full text-center uppercase font-bold tracking-widest text-lg p-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500">
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition">Buscar Estado</button>
+        </form>
+
+        <div class="mt-6">
+            <a href="/" class="text-xs text-gray-500 hover:underline">← Volver al formulario principal</a>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+# --- VISTA CLIENTE: SEGUIMIENTO DETALLADO ---
 HTML_SEGUIMIENTO = """
 <!DOCTYPE html>
 <html lang="es">
@@ -164,11 +200,14 @@ HTML_SEGUIMIENTO = """
             </div>
         {% else %}
             <div class="bg-red-50 border border-red-200 p-4 rounded-lg mb-6 text-red-700 text-sm">
-                No encontramos ninguna solicitud registrada con este código.
+                No encontramos ninguna solicitud registrada con el código <strong>{{ codigo }}</strong>.
             </div>
         {% endif %}
 
-        <a href="/" class="inline-block bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-4 py-2 rounded-lg text-sm transition">← Volver al inicio</a>
+        <div class="flex gap-2 justify-center">
+            <a href="/buscar-seguimiento" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold px-4 py-2 rounded-lg text-xs transition">Probar otro código</a>
+            <a href="/" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-lg text-xs transition">Inicio</a>
+        </div>
     </div>
 </body>
 </html>
@@ -261,6 +300,15 @@ def enviar_telegram(mensaje):
 def home():
     return render_template_string(HTML_LAYOUT)
 
+@app.route('/buscar-seguimiento', methods=['GET', 'POST'])
+def buscar_seguimiento():
+    if request.method == 'POST':
+        codigo_ingresado = request.form.get('codigo', '').strip().upper()
+        if not codigo_ingresado.startswith('CHAZ-') and codigo_ingresado.isdigit():
+            codigo_ingresado = 'CHAZ-' + codigo_ingresado
+        return redirect(url_for('seguimiento', codigo=codigo_ingresado))
+    return render_template_string(HTML_BUSCAR)
+
 @app.route('/pedir-servicio', methods=['POST'])
 def pedir_servicio():
     datos = request.form
@@ -275,7 +323,6 @@ def pedir_servicio():
     codigo = generar_codigo_seguimiento()
     estado_inicial = "🔎 Buscando técnico calificado en la zona"
 
-    # Guardar en Base de Datos SQLite
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('''
@@ -285,11 +332,9 @@ def pedir_servicio():
     conn.commit()
     conn.close()
 
-    # Formatear teléfono para enlace directo a WhatsApp
     tel_limpio = "".join(filter(str.isdigit, telefono))
     link_wa = f"https://wa.me/{tel_limpio}"
 
-    # Alerta por Telegram con HTML y botón directo de WhatsApp
     mensaje_telegram = f"""
 <b>🚨 NUEVA SOLICITUD EN CHAZ [{codigo}] 🚨</b>
 
@@ -305,7 +350,6 @@ def pedir_servicio():
 """
     enviar_telegram(mensaje_telegram)
 
-    # Respuesta amigable en pantalla para el cliente
     return f"""
     <div style='max-width:500px; margin: 40px auto; text-align:center; padding:30px; font-family:sans-serif; background:#fff; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1);'>
         <h1 style='color:#2b6cb0; margin-bottom:10px;'>¡Solicitud recibida! ⚡</h1>
@@ -326,6 +370,7 @@ def pedir_servicio():
 
 @app.route('/seguimiento/<codigo>')
 def seguimiento(codigo):
+    codigo = codigo.upper()
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM solicitudes WHERE codigo = ?', (codigo,))
@@ -347,7 +392,6 @@ def seguimiento(codigo):
     }
     return render_template_string(HTML_SEGUIMIENTO, encontrado=True, solicitud=solicitud, codigo=codigo)
 
-# --- RUTAS PRIVADAS DEL PANEL ADMIN ---
 @app.route('/admin')
 def admin():
     conn = sqlite3.connect(DB_FILE)
