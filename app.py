@@ -11,8 +11,8 @@ app = Flask(__name__)
 resend.api_key = os.environ.get('RESEND_API_KEY')
 
 # --- CREDENCIALES DE TELEGRAM (Desde variables de entorno de Render) ---
-TELEGRAM_BOT_TOKEN = os.environ.get('8679102389:AAG-hC8NinUI5Fqp5kqjkhVITl8PdP0UUvM')
-TELEGRAM_CHAT_ID = os.environ.get('7798074673')
+TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
+TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID')
 
 # Base de datos temporal en memoria
 solicitudes_db = {}
@@ -154,10 +154,14 @@ HTML_SEGUIMIENTO = """
 """
 
 def enviar_telegram(mensaje):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        print("Error: Faltan variables TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID en Render")
+        return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": mensaje, "parse_mode": "Markdown"}
     try:
-        requests.post(url, json=payload)
+        res = requests.post(url, json=payload, timeout=5)
+        print("Respuesta Telegram:", res.status_code, res.text)
     except Exception as e:
         print(f"Error enviando Telegram: {e}")
 
@@ -200,30 +204,31 @@ def pedir_servicio():
 """
     enviar_telegram(mensaje_telegram)
 
-    # 2. Envío de Correo mediante API HTTP de Resend (Rápido e infalible)
+    # 2. Envío de Correo mediante API HTTP de Resend
     try:
-        resend.Emails.send({
-            "from": "Chaz Servicios <onboarding@resend.dev>",
-            "to": [email],
-            "subject": f"Confirmación de Solicitud #{codigo} - Chaz",
-            "html": f"""
-            <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px;">
-                <h2 style="color: #2b6cb0; text-align: center;">¡Recibimos tu solicitud en Chaz!</h2>
-                <p>Hola <strong>{nombre}</strong>,</p>
-                <p>Hemos recibido tu requerimiento para el servicio de <strong>{categoria}</strong> ({subcategoria}). Tu código de seguimiento es:</p>
-                <div style="background-color: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #2b6cb0; border-radius: 6px; margin: 20px 0;">
-                    {codigo}
+        if resend.api_key:
+            resend.Emails.send({
+                "from": "Chaz Servicios <onboarding@resend.dev>",
+                "to": [email],
+                "subject": f"Confirmación de Solicitud #{codigo} - Chaz",
+                "html": f"""
+                <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #e0e0e0; padding: 20px; border-radius: 8px;">
+                    <h2 style="color: #2b6cb0; text-align: center;">¡Recibimos tu solicitud en Chaz!</h2>
+                    <p>Hola <strong>{nombre}</strong>,</p>
+                    <p>Hemos recibido tu requerimiento para el servicio de <strong>{categoria}</strong> ({subcategoria}). Tu código de seguimiento es:</p>
+                    <div style="background-color: #f3f4f6; padding: 15px; text-align: center; font-size: 24px; font-weight: bold; letter-spacing: 2px; color: #2b6cb0; border-radius: 6px; margin: 20px 0;">
+                        {codigo}
+                    </div>
+                    <p>Estamos notificando a nuestros técnicos verificados de tu zona. Te contactaremos a la brevedad para coordinar la visita.</p>
+                    <p>Puedes revisar el estado de tu solicitud en tiempo real haciendo clic en el siguiente enlace:</p>
+                    <div style="text-align: center; margin: 25px 0;">
+                        <a href="https://{request.host}/seguimiento/{codigo}" style="background-color: #2b6cb0; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ver Estado de mi Solicitud</a>
+                    </div>
+                    <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
+                    <p style="font-size: 12px; color: #6b7280; text-align: center;">Chaz – Asistencia al Hogar On-Demand</p>
                 </div>
-                <p>Estamos notificando a nuestros técnicos verificados de tu zona. Te contactaremos a la brevedad para coordinar la visita.</p>
-                <p>Puedes revisar el estado de tu solicitud en tiempo real haciendo clic en el siguiente enlace:</p>
-                <div style="text-align: center; margin: 25px 0;">
-                    <a href="https://{request.host}/seguimiento/{codigo}" style="background-color: #2b6cb0; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold;">Ver Estado de mi Solicitud</a>
-                </div>
-                <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;">
-                <p style="font-size: 12px; color: #6b7280; text-align: center;">Chaz – Asistencia al Hogar On-Demand</p>
-            </div>
-            """
-        })
+                """
+            })
     except Exception as e:
         print(f"Error enviando correo con Resend: {e}")
 
