@@ -10,15 +10,15 @@ app = Flask(__name__)
 # --- CONFIGURACIÓN DE CORREO CON RESEND ---
 resend.api_key = os.environ.get('RESEND_API_KEY')
 
-# --- CREDENCIALES DE TELEGRAM (Desde variables de entorno) ---
-TELEGRAM_BOT_TOKEN = os.environ.get'8893928560:AAEvg1UkIZsN6mNcoXEQZ1xMu1dMVGxQOL0'
-TELEGRAM_CHAT_ID = os.environ.get'7798074673'
+# --- CREDENCIALES DE TELEGRAM (Desde variables de entorno de Render) ---
+TELEGRAM_BOT_TOKEN = os.environ.get('8679102389:AAG-hC8NinUI5Fqp5kqjkhVITl8PdP0UUvM')
+TELEGRAM_CHAT_ID = os.environ.get('7798074673')
 
 # Base de datos temporal en memoria
 solicitudes_db = {}
 
 def generar_codigo_seguimiento():
-    return 'CHAZ-' + ''.join(random.choices(string.digits, k=4))
+    return 'CHAZ-' + ''.join(random.choices(string.digits, k=4))    
 
 # HTML PRINCIPAL
 HTML_LAYOUT = """
