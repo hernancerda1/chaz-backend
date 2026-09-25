@@ -11,7 +11,7 @@ app = Flask(__name__)
 resend.api_key = os.environ.get('RESEND_API_KEY')
 
 # --- CREDENCIALES DE TELEGRAM ---
-TELEGRAM_BOT_TOKEN = '8645189972:AAHCxjsGiorRmBs19BwYJIDiteEaQEmKxWg'
+TELEGRAM_BOT_TOKEN = '8893928560:AAEvg1UkIZsN6mNcoXEQZ1xMu1dMVGxQOL0'
 TELEGRAM_CHAT_ID = '7798074673'
 
 # Base de datos temporal en memoria
